@@ -3,7 +3,7 @@ const {
     useMultiFileAuthState,
     DisconnectReason,
     fetchLatestBaileysVersion,
-} = require('@whiskeysockets/baileys')
+} = require('atexovi-baileys')
 const pino = require('pino')
 const fs = require('fs')
 const path = require('path')
@@ -143,9 +143,13 @@ async function connectAccount(accountName, authFolder, callerSock = null, caller
 
         let text = '';
         if (messageType === 'conversation') text = msg.message.conversation;
-        else if (messageType === 'extendedTextMessage') text = msg.message.extendedTextMessage.text;
-        else if (messageType === 'imageMessage') text = msg.message.imageMessage.caption;
-        else if (messageType === 'videoMessage') text = msg.message.videoMessage.caption;
+        else if (messageType === 'extendedTextMessage') text = msg.message.extendedTextMessage?.text;
+        else if (messageType === 'imageMessage') text = msg.message.imageMessage?.caption;
+        else if (messageType === 'videoMessage') text = msg.message.videoMessage?.caption;
+        // ✅ استقبال ضغط الأزرار
+        else if (messageType === 'buttonsResponseMessage') text = msg.message.buttonsResponseMessage?.selectedButtonId;
+        else if (messageType === 'templateButtonReplyMessage') text = msg.message.templateButtonReplyMessage?.selectedId;
+
         text = text?.trim() || '';
 
         let isCommand = false;
@@ -190,3 +194,4 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
     console.error('🛡️ رفض غير معالج:', reason?.message || reason);
 });
+
