@@ -34,11 +34,10 @@ module.exports = {
         // ✅ الحل الصح: fromMe يعني الرسالة صادرة من صاحب البوت نفسه
         const isOwner = msg.key.fromMe === true;
 
-        // ╔═════════════════════╗
-        // ║         .انا / .My  — صاحب البوت       ║
-        // ╚═════════════════════╝
+        // ╔══════════════════════════════════════════╗
+        // ║         .انا / .My  — صاحب البوت         ║
+        // ╚══════════════════════════════════════════╝
         if (text === '.انا' || text === '.My') {
-            await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
 
             if (!isOwner) {
                 return await sock.sendMessage(from, {
@@ -70,11 +69,10 @@ module.exports = {
             }, { quoted: msg });
         }
 
-        // ╔═══════════════════════╗
+        // ╔══════════════════════════════════════════╗
         // ║       .الملف الشخصي — أي مستخدم          ║
-        // ╚═══════════════════════╝
+        // ╚══════════════════════════════════════════╝
         if (text === '.الملف الشخصي') {
-            await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
 
             const ctx = msg.message?.extendedTextMessage?.contextInfo
                      || msg.message?.imageMessage?.contextInfo

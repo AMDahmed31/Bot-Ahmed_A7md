@@ -3,7 +3,7 @@ const {
     useMultiFileAuthState,
     DisconnectReason,
     fetchLatestBaileysVersion,
-} = require('atexovi-baileys')
+} = require('@whiskeysockets/baileys')
 const pino = require('pino')
 const fs = require('fs')
 const path = require('path')
@@ -27,9 +27,7 @@ function loadConfig() {
     const configPath = './config.json';
     if (!fs.existsSync(configPath)) {
         const defaultConfig = {
-            accounts: [
-                { name: 'الحساب الرئيسي', authFolder: 'auth_main' }
-            ]
+            accounts: [{ name: 'الحساب الرئيسي', authFolder: 'auth_main' }]
         };
         fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
         return defaultConfig;
@@ -47,6 +45,7 @@ function loadCommands() {
     const commandFiles = fs.readdirSync(commandsDir).filter(f => f.endsWith('.js'));
     for (const file of commandFiles) {
         try {
+            delete require.cache[require.resolve(path.join(commandsDir, file))];
             const cmd = require(path.join(commandsDir, file));
             commands.set(file, cmd);
         } catch (e) {
@@ -111,6 +110,14 @@ async function connectAccount(accountName, authFolder, callerSock = null, caller
         const isMe = msg.key.fromMe;
         const messageType = Object.keys(msg.message)[0];
 
+        // ── تصويتات الاستطلاع → نظام المسابقة ──
+        if (messageType === 'pollUpdateMessage') {
+            const quizCmd = commands.get('quiz.js');
+            if (quizCmd?.onPollVote) quizCmd.onPollVote(sock, msg, from);
+            return;
+        }
+
+        // ── ردود الفعل ──
         if (messageType === 'reactionMessage' && isMe) {
             const reaction = msg.message.reactionMessage;
             const targetKey = reaction.key;
@@ -141,17 +148,30 @@ async function connectAccount(accountName, authFolder, callerSock = null, caller
             return;
         }
 
+        // ── استخراج النص ──
         let text = '';
         if (messageType === 'conversation') text = msg.message.conversation;
-        else if (messageType === 'extendedTextMessage') text = msg.message.extendedTextMessage?.text;
-        else if (messageType === 'imageMessage') text = msg.message.imageMessage?.caption;
-        else if (messageType === 'videoMessage') text = msg.message.videoMessage?.caption;
-        // ✅ استقبال ضغط الأزرار
-        else if (messageType === 'buttonsResponseMessage') text = msg.message.buttonsResponseMessage?.selectedButtonId;
-        else if (messageType === 'templateButtonReplyMessage') text = msg.message.templateButtonReplyMessage?.selectedId;
-
+        else if (messageType === 'extendedTextMessage') text = msg.message.extendedTextMessage.text;
+        else if (messageType === 'imageMessage') text = msg.message.imageMessage.caption;
+        else if (messageType === 'videoMessage') text = msg.message.videoMessage.caption;
         text = text?.trim() || '';
 
+        // ── رد على رسالة البوت ──
+        const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
+        const quotedMsg = contextInfo?.quotedMessage;
+        const quotedParticipant = contextInfo?.participant;
+        const isReplyToBot = quotedMsg && !quotedParticipant && !isMe;
+
+        if (isReplyToBot) {
+            for (const [, cmd] of commands) {
+                if (cmd.execute) {
+                    try { await cmd.execute(sock, msg, from, text); } catch (e) {}
+                }
+            }
+            return;
+        }
+
+        // ── البحث عن الأمر ──
         let isCommand = false;
         let targetCommand = null;
         if (text) {
@@ -194,4 +214,3 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
     console.error('🛡️ رفض غير معالج:', reason?.message || reason);
 });
-
