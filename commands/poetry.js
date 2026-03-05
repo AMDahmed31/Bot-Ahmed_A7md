@@ -299,3 +299,54 @@ module.exports = {
             if (input) {
                 const parts = input.split(' ');
        
+                const poet = findPoet(parts[0]);
+                const cat = findCategory(parts[0]);
+                const poet2 = parts[1] ? findPoet(parts[1]) : null;
+                const cat2 = parts[1] ? findCategory(parts[1]) : null;
+
+                if (poet) pool = pool.filter(p => p.poet.includes(poet) || poet.includes(p.poet.split(' ').pop()));
+                else if (cat) pool = pool.filter(p => p.category === cat);
+
+                if (poet2) pool = pool.filter(p => p.poet.includes(poet2) || poet2.includes(p.poet.split(' ').pop()));
+                else if (cat2) pool = pool.filter(p => p.category === cat2);
+            }
+
+            if (!pool.length) {
+                return await sock.sendMessage(from, {
+                    text: '❌ لم أجد أبياتاً بهذه المعايير.\n\n' + buildMenu()
+                }, { quoted: msg });
+            }
+
+            return await sock.sendMessage(from, {
+                text: formatPoem(getRandom(pool))
+            }, { quoted: msg });
+        }
+
+        // .قصيدة
+        if (cmd === '.قصيدة') {
+            let pool = poems;
+
+            if (input) {
+                const poet = findPoet(input);
+                if (poet) pool = pool.filter(p => p.poet.includes(poet) || poet.includes(p.poet.split(' ').pop()));
+            }
+
+            if (!pool.length) {
+                return await sock.sendMessage(from, {
+                    text: '❌ لم أجد قصائد لهذا الشاعر.\n\n' + buildMenu()
+                }, { quoted: msg });
+            }
+
+            // اختار شاعر عشوائي وأرسل كل أبياته
+            const selectedPoet = getRandom([...new Set(pool.map(p => p.poet))]);
+            const poetPoems = pool.filter(p => p.poet === selectedPoet);
+
+            let msg2 = `📖 *${selectedPoet}*\n${'─'.repeat(25)}\n\n`;
+            poetPoems.forEach((p, i) => {
+                msg2 += `${p.text}\n\n`;
+            });
+
+            return await sock.sendMessage(from, { text: msg2.trim() }, { quoted: msg });
+        }
+    }
+};

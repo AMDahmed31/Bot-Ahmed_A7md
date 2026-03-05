@@ -1,0 +1,92 @@
+0 verbose cli /usr/local/bin/node /usr/local/bin/npm
+1 info using npm@11.11.0
+2 info using node@v24.14.0
+3 silly config load:file:/usr/local/lib/node_modules/npm/npmrc
+4 silly config load:file:/home/container/.npmrc
+5 silly config load:file:/usr/local/etc/npmrc
+6 verbose title npm install express qrcode npm axios form-data apt-get imagemagick npm sharp npm install sharp hadith-utils
+7 verbose argv "install" "express" "qrcode" "npm" "axios" "form-data" "apt-get" "imagemagick" "--yes" "npm" "sharp" "npm" "install" "sharp" "hadith-utils"
+8 verbose logfile logs-max:10 dir:/home/container/.npm/_logs/2026-03-02T22_56_20_518Z-
+9 verbose logfile /home/container/.npm/_logs/2026-03-02T22_56_20_518Z-debug-0.log
+10 silly logfile start cleaning logs, removing 1 files
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:359137280 maxSize:89784320 maxEntrySize:44892160
+13 silly idealTree buildDeps
+14 silly fetch manifest apt-get@^0.1.0
+15 silly packumentCache full:https://registry.npmjs.org/apt-get cache-miss
+16 http cache https://registry.npmjs.org/apt-get 1319ms (cache hit)
+17 silly packumentCache full:https://registry.npmjs.org/apt-get set size:4607 disposed:false
+18 silly fetch manifest axios@^1.13.6
+19 silly packumentCache full:https://registry.npmjs.org/axios cache-miss
+20 http cache https://registry.npmjs.org/axios 101ms (cache hit)
+21 silly packumentCache full:https://registry.npmjs.org/axios set size:770295 disposed:false
+22 silly fetch manifest express@^5.2.1
+23 silly packumentCache full:https://registry.npmjs.org/express cache-miss
+24 http cache https://registry.npmjs.org/express 52ms (cache hit)
+25 silly packumentCache full:https://registry.npmjs.org/express set size:801204 disposed:false
+26 silly fetch manifest form-data@^4.0.5
+27 silly packumentCache full:https://registry.npmjs.org/form-data cache-miss
+28 http cache https://registry.npmjs.org/form-data 40ms (cache hit)
+29 silly packumentCache full:https://registry.npmjs.org/form-data set size:153646 disposed:false
+30 silly fetch manifest imagemagick@^0.1.3
+31 silly packumentCache full:https://registry.npmjs.org/imagemagick cache-miss
+32 http cache https://registry.npmjs.org/imagemagick 35ms (cache hit)
+33 silly packumentCache full:https://registry.npmjs.org/imagemagick set size:10205 disposed:false
+34 silly fetch manifest install@^0.13.0
+35 silly packumentCache full:https://registry.npmjs.org/install cache-miss
+36 http cache https://registry.npmjs.org/install 70ms (cache hit)
+37 silly packumentCache full:https://registry.npmjs.org/install set size:110214 disposed:false
+38 silly fetch manifest npm@^11.11.0
+39 silly packumentCache full:https://registry.npmjs.org/npm cache-miss
+40 http cache https://registry.npmjs.org/npm 319ms (cache hit)
+41 silly packumentCache full:https://registry.npmjs.org/npm set size:23953300 disposed:false
+42 silly fetch manifest qrcode@^1.5.4
+43 silly packumentCache full:https://registry.npmjs.org/qrcode cache-miss
+44 http cache https://registry.npmjs.org/qrcode 61ms (cache hit)
+45 silly packumentCache full:https://registry.npmjs.org/qrcode set size:131489 disposed:false
+46 silly fetch manifest sharp@^0.34.5
+47 silly packumentCache full:https://registry.npmjs.org/sharp cache-miss
+48 http cache https://registry.npmjs.org/sharp 121ms (cache hit)
+49 silly packumentCache full:https://registry.npmjs.org/sharp set size:1034463 disposed:false
+50 silly fetch manifest hadith-utils@*
+51 silly packumentCache full:https://registry.npmjs.org/hadith-utils cache-miss
+52 http fetch GET 404 https://registry.npmjs.org/hadith-utils 482ms (cache skip)
+53 silly placeDep ROOT apt-get@0.1.0 REPLACE for: bot2@1.0.0 want: ^0.1.0
+54 silly placeDep ROOT axios@1.13.6 REPLACE for: bot2@1.0.0 want: ^1.13.6
+55 silly placeDep ROOT express@5.2.1 REPLACE for: bot2@1.0.0 want: ^5.2.1
+56 silly placeDep ROOT form-data@4.0.5 REPLACE for: bot2@1.0.0 want: ^4.0.5
+57 silly placeDep ROOT hadith-utils@ OK for: bot2@1.0.0 want: *
+58 silly placeDep ROOT imagemagick@0.1.3 REPLACE for: bot2@1.0.0 want: ^0.1.3
+59 silly placeDep ROOT install@0.13.0 REPLACE for: bot2@1.0.0 want: ^0.13.0
+60 silly placeDep ROOT npm@11.11.0 REPLACE for: bot2@1.0.0 want: ^11.11.0
+61 silly placeDep ROOT qrcode@1.5.4 REPLACE for: bot2@1.0.0 want: ^1.5.4
+62 silly placeDep ROOT sharp@0.34.5 REPLACE for: bot2@1.0.0 want: ^0.34.5
+63 verbose stack HttpErrorGeneral: 404 Not Found - GET https://registry.npmjs.org/hadith-utils - Not found
+63 verbose stack     at /usr/local/lib/node_modules/npm/node_modules/npm-registry-fetch/lib/check-response.js:103:15
+63 verbose stack     at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+63 verbose stack     at async RegistryFetcher.packument (/usr/local/lib/node_modules/npm/node_modules/pacote/lib/registry.js:90:19)
+63 verbose stack     at async RegistryFetcher.manifest (/usr/local/lib/node_modules/npm/node_modules/pacote/lib/registry.js:128:23)
+63 verbose stack     at async #fetchManifest (/usr/local/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/build-ideal-tree.js:1227:20)
+63 verbose stack     at async #nodeFromEdge (/usr/local/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/build-ideal-tree.js:1061:19)
+63 verbose stack     at async #buildDepStep (/usr/local/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/build-ideal-tree.js:917:11)
+63 verbose stack     at async Arborist.buildIdealTree (/usr/local/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/build-ideal-tree.js:170:7)
+63 verbose stack     at async Promise.all (index 1)
+63 verbose stack     at async Arborist.reify (/usr/local/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/reify.js:110:5)
+64 verbose statusCode 404
+65 verbose pkgid hadith-utils@*
+66 error code E404
+67 error 404 Not Found - GET https://registry.npmjs.org/hadith-utils - Not found
+68 error 404
+69 error 404  The requested resource 'hadith-utils@*' could not be found or you do not have permission to access it.
+70 error 404
+71 error 404 Note that you can also install from a
+72 error 404 tarball, folder, http url, or git url.
+73 silly unfinished npm timer reify 1772492182823
+74 silly unfinished npm timer reify:loadTrees 1772492182824
+75 verbose cwd /home/container
+76 verbose os Linux 6.1.0-28-amd64
+77 verbose node v24.14.0
+78 verbose npm  v11.11.0
+79 verbose exit 1
+80 verbose code 1
+81 error A complete log of this run can be found in: /home/container/.npm/_logs/2026-03-02T22_56_20_518Z-debug-0.log

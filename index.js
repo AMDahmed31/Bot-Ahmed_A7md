@@ -105,6 +105,7 @@ async function connectAccount(accountName, authFolder, callerSock = null, caller
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0];
         if (!msg.message) return;
+        if (msg.messageTimestamp && (Date.now() / 1000 - msg.messageTimestamp) > 30) return;
         const from = msg.key.remoteJid;
         if (from === 'status@broadcast') return;
         const isMe = msg.key.fromMe;
@@ -164,8 +165,15 @@ async function connectAccount(accountName, authFolder, callerSock = null, caller
 
         if (isReplyToBot) {
             for (const [, cmd] of commands) {
+                if (cmd.commands && cmd.commands.some(c => text.startsWith(c))) {
+                    try { await cmd.execute(sock, msg, from, text); } catch (e) {}
+                    return;
+                }
+            }
+            for (const [, cmd] of commands) {
                 if (cmd.execute) {
                     try { await cmd.execute(sock, msg, from, text); } catch (e) {}
+                    return;
                 }
             }
             return;
