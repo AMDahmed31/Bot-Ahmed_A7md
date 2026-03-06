@@ -90,19 +90,51 @@ function boldNum(n) {
     return '【' + String(n).split('').map(c => map[c]).join('') + '】';
 }
 
+// ========================
+// إصلاح البحث عن السورة
+// يعالج سور الحرف الواحد (ق، ص، ن) بشكل صحيح
+// ========================
+function findSurahIndex(text) {
+    const cleaned = text.trim();
+    if (!cleaned) return -1;
+
+    // 1. تطابق كامل أولاً
+    const exact = surahs.findIndex(s => s === cleaned);
+    if (exact !== -1) return exact;
+
+    // 2. ابحث بأطول تطابق لتجنب "ق" تأكل "القمر"
+    let bestIdx = -1;
+    let bestLen = 0;
+
+    surahs.forEach((s, i) => {
+        if (s.length === 1) {
+            // سور الحرف الواحد: يجب أن تكون كلمة منفصلة
+            const words = cleaned.split(/\s+/);
+            if (words.includes(s) && s.length > bestLen) {
+                bestIdx = i;
+                bestLen = s.length;
+            }
+        } else {
+            if (cleaned.includes(s) && s.length > bestLen) {
+                bestIdx = i;
+                bestLen = s.length;
+            }
+        }
+    });
+
+    return bestIdx;
+}
+
 function searchReciters(reciters, query) {
     const q = query.trim();
-    // 1. بحث بكل الكلمات
     const words = q.split(/\s+/).filter(w => w.length > 0);
     let result = reciters.filter(r => words.every(w => r.name.includes(w)));
     if (result.length) return result;
-    // 2. بحث بأي كلمة (أكثر من حرفين)
     const longWords = words.filter(w => w.length > 2);
     if (longWords.length) {
         result = reciters.filter(r => longWords.some(w => r.name.includes(w)));
         if (result.length) return result;
     }
-    // 3. بحث بالاسم كاملاً
     return reciters.filter(r => r.name.includes(q) || q.includes(r.name.split(' ')[0]));
 }
 
@@ -110,6 +142,9 @@ function searchMoshaf(moshafs, query) {
     return moshafs.filter(m => m.name.includes(query) || query.includes(m.name.split(/[\s-]/)[0]));
 }
 
+// ========================
+// قائمة الأوامر - مع زر الكتالوج في الآخر
+// ========================
 function buildCommandsMenu() {
     let msg = '*˼🕌˹ قـسـم الـقـرآن الـكـريـم╿↶*\n';
     msg += '━ ── • ⟐ • ── ━\n\n';
@@ -123,7 +158,76 @@ function buildCommandsMenu() {
     msg += '❝ .قراء (سورة) ❞\n↫ كل قراء السورة\n\n';
     msg += '❝ .راديو ❞\n↫ بث مكة والمدينة ومصر\n\n';
     msg += '▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n\n';
-    msg += '         ✦ قُـرْآنٌ كَـرِيـمٌ ✦';
+    msg += '         ✦ قُـرْآنٌ كَـرِيـمٌ ✦\n\n';
+    msg += '━ ── • ⟐ • ── ━\n\n';
+    msg += '📚 *لعرض كتالوج السور والقراء:*\n';
+    msg += '❝ .كتالوج ❞';
+    return msg;
+}
+
+// ========================
+// كتالوج السور والقراء
+// ========================
+function buildCatalogSurahs() {
+    let msg = '*˼📚˹ كـتـالـوج الـسـور╿↶*\n';
+    msg += '━ ── • ⟐ • ── ━\n\n';
+    msg += '🗂️ *السور القرآنية الكريمة*\n\n';
+    msg += '▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n\n';
+
+    // عرض السور في 3 أعمدة بأرقامها
+    let line = '';
+    let count = 0;
+    surahs.forEach((s, i) => {
+        line += `${boldNum(i + 1)} ${s}     `;
+        count++;
+        if (count % 3 === 0) {
+            msg += line.trim() + '\n';
+            line = '';
+        }
+    });
+    if (line.trim()) msg += line.trim() + '\n';
+
+    msg += '\n▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n\n';
+    msg += '💡 *مثال للاستخدام:*\n';
+    msg += '❝ .قرآن الفاتحة الحصري ❞\n';
+    msg += '❝ .قرآن البقرة المنشاوي ❞\n\n';
+    msg += '📖 *لعرض القراء:* ❝ .كتالوج قراء ❞';
+    return msg;
+}
+
+function buildCatalogReciters(reciters) {
+    const nums = ['❶','❷','❸','❹','❺','❻','❼','❽','❾','❿','⓫','⓬','⓭','⓮','⓯'];
+
+    let msg = '*˼🎙️˹ كـتـالـوج الـقـراء╿↶*\n';
+    msg += '━ ── • ⟐ • ── ━\n\n';
+    msg += '⭐ *القراء المشهورون*\n';
+    msg += '┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n\n';
+
+    const famous = reciters.slice(0, famousNames.length);
+    famous.forEach((r, i) => {
+        msg += `${nums[i] || boldNum(i + 1)} *${r.name}*\n`;
+    });
+
+    msg += '\n▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n\n';
+    msg += '📖 *باقي القراء*\n';
+    msg += '┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n';
+
+    const rest = reciters.slice(famousNames.length);
+    let currentLetter = '';
+    rest.forEach((r, i) => {
+        const letter = r.name[0];
+        if (letter !== currentLetter) {
+            currentLetter = letter;
+            msg += `\n─── ${letter} ───\n`;
+        }
+        msg += `${boldNum(famousNames.length + i + 1)} ${r.name}\n`;
+    });
+
+    msg += '\n▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n\n';
+    msg += '💡 *مثال للاستخدام:*\n';
+    msg += '❝ .قارئ 1 ❞ ← للمنشاوي مثلاً\n';
+    msg += '❝ .قرآن الفاتحة السديس ❞\n\n';
+    msg += '📋 *لعرض السور:* ❝ .كتالوج ❞';
     return msg;
 }
 
@@ -210,12 +314,6 @@ function buildChooseReciterMenu(reciters, surahIndex) {
     return msg;
 }
 
-// ========================
-// إرسال الصوت
-// 1. جيب صورة القارئ (محلي → Pexels) + أضف اللوجو
-// 2. ابعت الصورة كرد على رسالة الأمر
-// 3. ابعت الصوت كرد على الصورة
-// ========================
 async function sendAudio(sock, msg, from, reciter, moshaf, surahIndex) {
     const surahNum = String(surahIndex + 1).padStart(3, '0');
     const audioUrl = `${moshaf.server}${surahNum}.mp3`;
@@ -230,7 +328,6 @@ async function sendAudio(sock, msg, from, reciter, moshaf, surahIndex) {
             `﷽\n` +
             `_بسم الله الرحمن الرحيم_`;
 
-        // 1. جيب الصورة مع اللوجو
         const imageBuffer = await getReciterImage(reciter.name);
 
         let sentMsg;
@@ -244,7 +341,6 @@ async function sendAudio(sock, msg, from, reciter, moshaf, surahIndex) {
             sentMsg = await sock.sendMessage(from, { text: caption }, { quoted: msg });
         }
 
-        // 2. حمّل الصوت وابعته كرد على الصورة
         const audioBuffer = await downloadBuffer(audioUrl);
         await sock.sendMessage(from, { react: { text: '🕌', key: msg.key } });
         await sock.sendMessage(from, {
@@ -260,7 +356,10 @@ async function sendAudio(sock, msg, from, reciter, moshaf, surahIndex) {
 }
 
 module.exports = {
-    commands: ['.قرآن', '.قران', '.القرآن الكريم', '.القرءان الكريم', '.القران الكريم', '.قارئ', '.سورة', '.مصحف', '.راديو', '.قراء'],
+    commands: [
+        '.قرآن', '.قران', '.القرآن الكريم', '.القرءان الكريم', '.القران الكريم',
+        '.قارئ', '.سورة', '.مصحف', '.راديو', '.قراء', '.كتالوج'
+    ],
 
     async execute(sock, msg, from, text) {
         try {
@@ -269,6 +368,9 @@ module.exports = {
             const cmd = parts[0];
             const quotedId = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
 
+            // ========================
+            // معالجة الردود على الجلسات
+            // ========================
             if (quotedId && sessions.has(quotedId)) {
                 const state = sessions.get(quotedId);
                 sessions.delete(quotedId);
@@ -324,6 +426,26 @@ module.exports = {
                 }
             }
 
+            // ========================
+            // أمر .كتالوج
+            // ========================
+            if (cmd === '.كتالوج') {
+                const sub = parts.slice(1).join(' ').trim();
+                if (sub === 'قراء') {
+                    await sock.sendMessage(from, { react: { text: '📚', key: msg.key } });
+                    const reciters = await getReciters();
+                    await sock.sendMessage(from, { text: buildCatalogReciters(reciters) }, { quoted: msg });
+                } else {
+                    // .كتالوج أو .كتالوج سور → يعرض السور
+                    await sock.sendMessage(from, { react: { text: '📚', key: msg.key } });
+                    await sock.sendMessage(from, { text: buildCatalogSurahs() }, { quoted: msg });
+                }
+                return;
+            }
+
+            // ========================
+            // أمر .مصحف
+            // ========================
             if (cmd === '.مصحف') {
                 const num = parseInt(parts[1]) - 1;
                 let foundState = null, foundKey = null;
@@ -342,6 +464,9 @@ module.exports = {
                 setSession(m2.key.id, { type: 'surahs', reciter: foundState.reciter, moshaf, from }); return;
             }
 
+            // ========================
+            // أمر .سورة
+            // ========================
             if (cmd === '.سورة') {
                 const num = parseInt(parts[1]) - 1;
                 let foundState = null, foundKey = null;
@@ -357,6 +482,9 @@ module.exports = {
                 return await sendAudio(sock, msg, from, foundState.reciter, foundState.moshaf, num);
             }
 
+            // ========================
+            // أمر .راديو
+            // ========================
             if (cmd === '.راديو') {
                 await sock.sendMessage(from, { react: { text: '📻', key: msg.key } });
                 await sock.sendMessage(from, {
@@ -369,11 +497,14 @@ module.exports = {
                 }, { quoted: msg }); return;
             }
 
+            // ========================
+            // أمر .قارئ
+            // ========================
             if (cmd === '.قارئ') {
                 const num = parseInt(parts[1]) - 1;
                 const reciters = await getReciters();
                 if (isNaN(num) || num < 0 || num >= reciters.length) {
-                    await sock.sendMessage(from, { text: `❌ رقم غلط` }, { quoted: msg }); return;
+                    await sock.sendMessage(from, { text: `❌ رقم غلط\n💡 اكتب *.كتالوج قراء* لتعرف الأرقام` }, { quoted: msg }); return;
                 }
                 const reciter = reciters[num];
                 if (reciter.moshaf.length === 1) {
@@ -384,11 +515,14 @@ module.exports = {
                 setSession(m.key.id, { type: 'moshaf', reciter, from }); return;
             }
 
+            // ========================
+            // أمر .قراء
+            // ========================
             if (cmd === '.قراء') {
                 const surahText = parts.slice(1).join(' ').trim();
-                const surahIdx = surahs.findIndex(s => surahText.includes(s) || s.includes(surahText));
+                const surahIdx = findSurahIndex(surahText); // ← إصلاح هنا
                 if (surahIdx === -1) {
-                    await sock.sendMessage(from, { text: '❌ اكتب اسم السورة صح.\nمثال: .قراء الفاتحة' }, { quoted: msg }); return;
+                    await sock.sendMessage(from, { text: '❌ اكتب اسم السورة صح.\nمثال: .قراء الفاتحة\n💡 اكتب *.كتالوج* لتعرف أسماء السور' }, { quoted: msg }); return;
                 }
                 await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
                 try {
@@ -418,10 +552,16 @@ module.exports = {
                 return;
             }
 
+            // ========================
+            // أمر .القرآن الكريم (الأوامر الثابتة)
+            // ========================
             if (cmd === '.القرآن' || cmd === '.القرءان' || cmd === '.القران') {
                 await sock.sendMessage(from, { text: buildCommandsMenu() }, { quoted: msg }); return;
             }
 
+            // ========================
+            // أمر .قرآن - الأمر الرئيسي
+            // ========================
             await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
             const reciters = await getReciters();
             const args = parts.slice(1).join(' ').trim();
@@ -440,9 +580,10 @@ module.exports = {
                 moshafQuery = args.substring(sepIdx + sep.length).trim();
             }
 
-            const surahIdx = surahs.findIndex(s => mainArgs.includes(s));
+            // ← إصلاح مشكلة سورة "ق" وغيرها من سور الحرف الواحد
+            const surahIdx = findSurahIndex(mainArgs);
             if (surahIdx === -1) {
-                await sock.sendMessage(from, { text: '❌ السورة غير موجودة.\nمثال: .قرآن الفاتحة' }, { quoted: msg }); return;
+                await sock.sendMessage(from, { text: '❌ السورة غير موجودة.\nمثال: .قرآن الفاتحة\n💡 اكتب *.كتالوج* لتعرف أسماء السور الصحيحة' }, { quoted: msg }); return;
             }
 
             const readerQuery = mainArgs.replace(surahs[surahIdx], '').trim();
@@ -454,7 +595,7 @@ module.exports = {
 
             const found = searchReciters(reciters, readerQuery);
             if (!found.length) {
-                await sock.sendMessage(from, { text: `❌ القارئ غير موجود.\nجرب: .قراء ${surahs[surahIdx]}` }, { quoted: msg }); return;
+                await sock.sendMessage(from, { text: `❌ القارئ غير موجود.\nجرب: .قراء ${surahs[surahIdx]}\n💡 أو اكتب *.كتالوج قراء* لكل القراء` }, { quoted: msg }); return;
             }
 
             if (found.length > 1) {
@@ -483,4 +624,3 @@ module.exports = {
         }
     }
 };
-
