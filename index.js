@@ -72,6 +72,22 @@ async function connectAccount(accountName, authFolder, callerSock = null, caller
 
     sock.ev.on('creds.update', saveCreds);
 
+    // ✅ تحديث LID cache كلما جاءت بيانات مجموعة
+    sock.ev.on('groups.update', (updates) => {
+        const quizCmd = commands.get('quiz.js');
+        if (!quizCmd?.updateLidCache) return;
+        for (const update of updates) quizCmd.updateLidCache(update);
+    });
+
+    sock.ev.on('group-participants.update', async ({ id }) => {
+        try {
+            const quizCmd = commands.get('quiz.js');
+            if (!quizCmd?.updateLidCache) return;
+            const meta = await sock.groupMetadata(id);
+            quizCmd.updateLidCache(meta);
+        } catch (_) {}
+    });
+
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
@@ -105,18 +121,22 @@ async function connectAccount(accountName, authFolder, callerSock = null, caller
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0];
         if (!msg.message) return;
-        if (msg.messageTimestamp && (Date.now() / 1000 - msg.messageTimestamp) > 30) return;
+
         const from = msg.key.remoteJid;
         if (from === 'status@broadcast') return;
+
         const isMe = msg.key.fromMe;
         const messageType = Object.keys(msg.message)[0];
 
-        // ── تصويتات الاستطلاع → نظام المسابقة ──
+        // ✅ تصويتات الاستطلاع — لا فلتر زمني هنا أبداً
         if (messageType === 'pollUpdateMessage') {
             const quizCmd = commands.get('quiz.js');
             if (quizCmd?.onPollVote) quizCmd.onPollVote(sock, msg, from);
             return;
         }
+
+        // فلتر الرسائل القديمة للرسائل العادية فقط
+        if (msg.messageTimestamp && (Date.now() / 1000 - msg.messageTimestamp) > 30) return;
 
         // ── ردود الفعل ──
         if (messageType === 'reactionMessage' && isMe) {
