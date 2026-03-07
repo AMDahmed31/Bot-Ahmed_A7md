@@ -13,7 +13,7 @@
   "type": "commonjs",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@whiskeysockets/baileys": "github:WhiskeySockets/Baileys#master",
+    "@whiskeysockets/baileys": "6.7.4",
     "adhan": "^4.4.3",
     "axios": "^1.13.6",
     "express": "^5.2.1",
