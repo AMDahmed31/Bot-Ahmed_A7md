@@ -13,10 +13,9 @@
   "type": "commonjs",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "@whiskeysockets/baileys": "github:WhiskeySockets/Baileys#master",
     "adhan": "^4.4.3",
     "axios": "^1.13.6",
-    "baileys": "github:WhiskeySockets/Baileys#master",
     "express": "^5.2.1",
     "form-data": "^4.0.5",
     "fs": "^0.0.1-security",
