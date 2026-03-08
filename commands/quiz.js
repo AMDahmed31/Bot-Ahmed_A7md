@@ -101,31 +101,57 @@ function parseAndValidate(text) {
     for (let bi = 0; bi < blocks.length; bi++) {
         const lines = blocks[bi].trim().split('\n').map(l => l.trim()).filter(Boolean);
         if (!lines.length) continue;
-        const qMatch = lines[0].match(/^س(\d+)\s*:\s*(.+)$/);
+        const qMatch = lines[0].match(/^س\d+\s*:\s*(.+)$/);
         if (!qMatch) { errors.push(`⚠️ كتلة ${bi+1}: "${lines[0]}"`); continue; }
-        const qText = qMatch[2].trim();
+        const qText = qMatch[1].trim();
         const choices = []; let correctIndex = -1, points = 2, explanation = '';
         const blockErrors = [];
         for (let li = 1; li < lines.length; li++) {
             const line = lines[li];
-            const cM = line.match(/^(\d+)[.\-\)]\s*(.+)$/);
+            const cM = line.match(/^(\d+)\s*[:.\)]\s*(.+)$/);
             if (cM) { choices.push(cM[2].trim()); continue; }
-            const aM = line.match(/^ج\s*:\s*(\d+)/);
+            const aM = line.match(/^الاختيار الصحيح\s*[:.\)]\s*(\d+)/);
             if (aM) { correctIndex = parseInt(aM[1]) - 1; continue; }
-            const pM = line.match(/^نقاط\s*:\s*(\d+)/);
+            const pM = line.match(/^نقاط\s*[:.\)]\s*(\d+)/);
             if (pM) { points = parseInt(pM[1]); continue; }
-            const eM = line.match(/^شرح\s*:\s*(.+)/);
+            const eM = line.match(/^رسالة\s*[:.\)]\s*(.+)/);
             if (eM) { explanation = eM[1].trim(); continue; }
         }
         if (choices.length < 2) blockErrors.push(`عدد الاختيارات ${choices.length} — يجب 2+`);
         if (choices.length > 4) blockErrors.push(`الحد الأقصى 4 اختيارات`);
-        if (correctIndex === -1) blockErrors.push(`لم يُحدَّد الجواب (ج: رقم)`);
+        if (correctIndex === -1) blockErrors.push(`لم يُحدَّد الاختيار الصحيح`);
         else if (correctIndex < 0 || correctIndex >= choices.length)
-            blockErrors.push(`رقم الجواب خارج النطاق`);
-        if (blockErrors.length) { errors.push(`⚠️ "${qText}":\n${blockErrors.map(e=>`   • ${e}`).join('\n')}`); continue; }
+            blockErrors.push(`رقم الاختيار الصحيح خارج النطاق`);
+        if (blockErrors.length) { errors.push(`⚠️ "${qText}":\n${blockErrors.map(e => `   • ${e}`).join('\n')}`); continue; }
         results.push({ question: qText, choices, correctIndex, points, explanation });
     }
     return { questions: results, errors };
+}
+
+async function startCountdown(sock, groupId, seconds) {
+    const timerMsg = await sock.sendMessage(groupId, {
+        text: `⏱️ *الوقت المتبقي: ${seconds} ثانية*`
+    });
+    const qs = activeQuizzes.get(groupId);
+    if (!qs) return;
+    qs.timerMsgKey = timerMsg.key;
+    let remaining = seconds - 1;
+    const interval = setInterval(async () => {
+        const currentQs = activeQuizzes.get(groupId);
+        if (!currentQs || currentQs.timerMsgKey?.id !== timerMsg.key.id) {
+            clearInterval(interval);
+            return;
+        }
+        try {
+            await sock.sendMessage(groupId, {
+                text: `⏱️ *الوقت المتبقي: ${remaining} ثانية*`,
+                edit: timerMsg.key
+            });
+        } catch(_) {}
+        if (remaining <= 0) clearInterval(interval);
+        remaining--;
+    }, 1000);
+    if (qs) qs.countdownInterval = interval;
 }
 
 async function sendQuestion(sock, groupId, qs) {
@@ -133,7 +159,6 @@ async function sendQuestion(sock, groupId, qs) {
     const qNum  = qs.currentIndex + 1;
     const total = qs.questions.length;
     const messageSecret = crypto.randomBytes(32);
-
     const pollMsg = await sock.sendMessage(groupId, {
         poll: {
             name: `❓ سؤال ${qNum}/${total}\n${q.question}`,
@@ -142,11 +167,11 @@ async function sendQuestion(sock, groupId, qs) {
             messageSecret
         }
     });
-
     qs.currentPollId    = pollMsg.key.id;
     qs.messageSecret    = messageSecret;
     qs.answeredUsers    = new Map();
     qs.firstCorrectUser = null;
+    await startCountdown(sock, groupId, 60);
     qs.timer = setTimeout(() => revealAnswer(sock, groupId), 60_000);
 }
 
@@ -154,18 +179,20 @@ async function revealAnswer(sock, groupId) {
     const qs = activeQuizzes.get(groupId);
     if (!qs) return;
     clearTimeout(qs.timer);
+    clearInterval(qs.countdownInterval);
     const q = qs.questions[qs.currentIndex];
-    let replyMsg = `✅ *الإجابة الصحيحة:* ${q.correctIndex+1}. ${q.choices[q.correctIndex]}\n`;
-    if (q.explanation) replyMsg += `💡 ${q.explanation}\n`;
+    const correctChoice = q.choices[q.correctIndex];
     const winner = qs.firstCorrectUser;
     const mentions = [];
+    let replyMsg = `✅ *الإجابة الصحيحة:*\n${q.correctIndex + 1}. ${correctChoice}`;
+    if (q.explanation) replyMsg += `\n${q.explanation}`;
     if (winner) {
         addPoints(groupId, winner, q.points);
         qs.scores.set(winner, (qs.scores.get(winner) || 0) + q.points);
         mentions.push(winner);
         replyMsg += `\n🏆 الفائز: @${winner.split('@')[0]}\n🎁 *+${q.points} نقطة*`;
     } else {
-        replyMsg += '\n😔 لم يُجب أحد بشكل صحيح.';
+        replyMsg += `\nلم يُجب أحد بشكل صحيح.`;
     }
     await sock.sendMessage(groupId, { text: replyMsg, mentions });
     qs.currentIndex++;
@@ -178,18 +205,18 @@ async function endQuiz(sock, groupId) {
     const qs = activeQuizzes.get(groupId);
     if (!qs) return;
     clearTimeout(qs.timer);
+    clearInterval(qs.countdownInterval);
     const sorted = [...qs.scores.entries()].sort((a, b) => b[1] - a[1]);
-    const medals = ['🥇','🥈','🥉'];
+    const medals = ['🥇', '🥈', '🥉'];
     const mentions = sorted.map(([jid]) => jid);
-
-    let finalMsg = `🏁 *انتهت المسابقة!*\n━━━━━━━━━━━━━━━━\n📊 *النتائج النهائية:*\n\n`;
+    let finalMsg = `*انتهت المسابقة!*\n━━━━━━━━━━━━━━━━\n📊 *النتائج النهائية:*\n`;
     if (!sorted.length) {
-        finalMsg += '😔 لم يحصل أحد على نقاط.\n';
+        finalMsg += `لم يحصل أحد على نقاط.`;
     } else {
         sorted.forEach(([jid, pts], i) => {
-            finalMsg += `${medals[i]||`${i+1}.`} @${jid.split('@')[0]} — *${pts} نقطة*\n`;
+            finalMsg += `${medals[i] || `${i + 1}.`} @${jid.split('@')[0]} — *${pts} نقطة*\n`;
         });
-        finalMsg += `\n━━━━━━━━━━━━━━━━\n🏆 *الفائز في المسابقة* 🏆\n"@${sorted[0][0].split('@')[0]}" 🎉`;
+        finalMsg += `━━━━━━━━━━━━━━━━\n🏆 *الفائز في المسابقة* 🏆\n"@${sorted[0][0].split('@')[0]}" 🎉`;
     }
     await sock.sendMessage(groupId, { text: finalMsg, mentions });
     activeQuizzes.delete(groupId);
@@ -198,42 +225,28 @@ async function endQuiz(sock, groupId) {
 function handlePollVote(sock, msg, from) {
     const qs = activeQuizzes.get(from);
     if (!qs) return;
-
     const pollUpdate = msg.message?.pollUpdateMessage;
     if (!pollUpdate) return;
-
     const pollId = pollUpdate.pollCreationMessageKey?.id;
     if (pollId !== qs.currentPollId) return;
-
     const rawVoter = msg.key.participant || msg.key.remoteJid;
     if (!rawVoter) return;
-
     const vote = pollUpdate.vote;
     if (!vote?.encPayload) return;
-
     const botLid = getBotLid();
     const botPn  = botLid.replace('@lid', '@s.whatsapp.net');
-
     const voterVariants = [
         rawVoter,
         rawVoter.replace('@lid', '@s.whatsapp.net'),
         rawVoter.replace('@s.whatsapp.net', '@lid'),
     ].filter((v, i, a) => v && a.indexOf(v) === i);
-
     const creatorVariants = [botLid, botPn].filter((v, i, a) => v && a.indexOf(v) === i);
-
     const q = qs.questions[qs.currentIndex];
-    let choiceIndex = -1;
-    let ok = false;
-
+    let choiceIndex = -1, ok = false;
     outer:
     for (const creator of creatorVariants) {
         for (const voter of voterVariants) {
-            const hashes = decryptVote(
-                vote.encPayload, vote.encIv,
-                qs.messageSecret, creator,
-                qs.currentPollId, voter
-            );
+            const hashes = decryptVote(vote.encPayload, vote.encIv, qs.messageSecret, creator, qs.currentPollId, voter);
             if (!hashes.length) continue;
             ok = true;
             for (let i = 0; i < q.choices.length; i++) {
@@ -245,10 +258,7 @@ function handlePollVote(sock, msg, from) {
             break outer;
         }
     }
-
-    if (!ok) return;
-    if (choiceIndex === -1) return;
-
+    if (!ok || choiceIndex === -1) return;
     if (!qs.answeredUsers.has(rawVoter)) {
         qs.answeredUsers.set(rawVoter, choiceIndex);
         if (choiceIndex === q.correctIndex && !qs.firstCorrectUser)
@@ -264,6 +274,7 @@ module.exports = {
         '.عرض الاسئلة',
         '.مسح الاسئلة',
         '.مساعدة_مسابقة',
+        '.قالب مسابقة',
         'مسابقة جديدة'
     ],
 
@@ -272,53 +283,47 @@ module.exports = {
         const isOwner = sender?.split('@')[0] === OWNER_NUMBER || msg.key.fromMe;
         const trimmed = text.trim();
 
-        // ─── كتالوج الأوامر ───
+        if (trimmed === '.قالب مسابقة') {
+            const template = `مسابقة جديدة
+س1: اكتب السؤال هنا؟
+1: الاختيار الأول
+2: الاختيار الثاني
+3: الاختيار الثالث
+4: الاختيار الرابع
+الاختيار الصحيح: 1
+نقاط: 2
+رسالة: نص يظهر بعد الإجابة (احذف السطر لو مش محتاجه)
+
+س2: اكتب السؤال هنا؟
+1: الاختيار الأول
+2: الاختيار الثاني
+3: الاختيار الثالث
+4: الاختيار الرابع
+الاختيار الصحيح: 1
+نقاط: 2
+رسالة: نص يظهر بعد الإجابة (احذف السطر لو مش محتاجه)`;
+            return await sock.sendMessage(from, { text: template }, { quoted: msg });
+        }
+
         if (trimmed === '.مساعدة_مسابقة') {
-            const helpText = `
-《 دليل أوامر المسابقة 》
+            const helpText = `《 دليل أوامر المسابقة 》
 ____________________
-
-1️⃣ *إضافة أسئلة:*
-مسابقة جديدة
-س1: السؤال؟
-1. الاختيار الأول
-2. الاختيار الثاني
-3. الاختيار الثالث
-ج: 2
-نقاط: 3
-شرح: تفسير الإجابة (اختياري)
-
-2️⃣ *بدء المسابقة:*
-_.بدء مسابقة_
-
-3️⃣ *إيقاف المسابقة:*
-_.إيقاف المسابقة_
-
-4️⃣ *حالة المسابقة:*
-_.حالة المسابقة_
-
-5️⃣ *عرض الأسئلة المحفوظة:*
-_.عرض الاسئلة_
-
-6️⃣ *مسح جميع الأسئلة:*
-_.مسح الاسئلة_
-
-🔐 *ملاحظات:*
-• الأسئلة تُحفظ حتى تُمسح يدوياً
-• كل سؤال مدته دقيقة واحدة
-• النقاط تُضاف تلقائياً لقاعدة البيانات
-• الأوامر للمطور فقط
-`.trim();
+1️⃣ *قالب جاهز:* _.قالب مسابقة_
+2️⃣ *إضافة أسئلة:* مسابقة جديدة + الأسئلة
+3️⃣ *بدء المسابقة:* _.بدء مسابقة_
+4️⃣ *إيقاف المسابقة:* _.إيقاف المسابقة_
+5️⃣ *حالة المسابقة:* _.حالة المسابقة_
+6️⃣ *عرض الأسئلة:* _.عرض الاسئلة_
+7️⃣ *مسح الأسئلة:* _.مسح الاسئلة_
+⏱️ مدة كل سؤال: 60 ثانية
+🔐 الأوامر للمطور فقط`;
             return await sock.sendMessage(from, { text: helpText }, { quoted: msg });
         }
 
-        // ─── إضافة أسئلة ───
         if (trimmed.startsWith('مسابقة جديدة')) {
             if (!isOwner) return sock.sendMessage(from, { text: '⛔ للمطور فقط.' }, { quoted: msg });
             const content = trimmed.replace(/^مسابقة جديدة\s*/i, '').trim();
-            if (!content) return sock.sendMessage(from, {
-                text: `📋 *الصيغة:*\nمسابقة جديدة\nس1: السؤال؟\n1. أ\n2. ب\nج: 1\nنقاط: 2`
-            }, { quoted: msg });
+            if (!content) return sock.sendMessage(from, { text: `📋 اكتب .قالب مسابقة للحصول على القالب` }, { quoted: msg });
             const { questions, errors } = parseAndValidate(content);
             if (errors.length) return sock.sendMessage(from, { text: `❌ أخطاء:\n${errors.join('\n')}` }, { quoted: msg });
             if (!questions.length) return sock.sendMessage(from, { text: '❌ لا أسئلة صالحة.' }, { quoted: msg });
@@ -327,66 +332,66 @@ _.مسح الاسئلة_
             return sock.sendMessage(from, { text: `✅ تم حفظ ${questions.length} سؤال. الإجمالي: ${combined.length}` }, { quoted: msg });
         }
 
-        // ─── بدء المسابقة ───
         if (trimmed === '.بدء مسابقة اسئلة' || trimmed === '.بدء مسابقة') {
             if (!isOwner) return sock.sendMessage(from, { text: '⛔ للمطور فقط.' }, { quoted: msg });
             if (activeQuizzes.has(from)) return sock.sendMessage(from, { text: '⚠️ مسابقة نشطة!' }, { quoted: msg });
             const questions = loadQuestions();
-            if (!questions.length) return sock.sendMessage(from, { text: '📭 لا توجد أسئلة.\nاكتب .مساعدة_مسابقة لمعرفة كيفية الإضافة.' }, { quoted: msg });
+            if (!questions.length) return sock.sendMessage(from, { text: '📭 لا توجد أسئلة.\nاكتب .قالب مسابقة للبدء.' }, { quoted: msg });
             const qs = {
                 questions, currentIndex: 0, scores: new Map(),
                 answeredUsers: new Map(), firstCorrectUser: null,
-                currentPollId: null, messageSecret: null, timer: null
+                currentPollId: null, messageSecret: null,
+                timer: null, countdownInterval: null, timerMsgKey: null
             };
             activeQuizzes.set(from, qs);
-            await sock.sendMessage(from, { text: `🎯 *بدأت المسابقة!*\n📝 ${questions.length} سؤال\n⏱️ دقيقة لكل سؤال\n\nللمساعدة: .مساعدة_مسابقة` });
+            await sock.sendMessage(from, {
+                text: `🎯 *بدأت المسابقة!*\n📝 عدد الاسئلة ${questions.length}\n⏱️ دقيقة لكل سؤال`
+            });
             await new Promise(r => setTimeout(r, 2000));
             await sendQuestion(sock, from, qs);
             return;
         }
 
-        // ─── إيقاف المسابقة ───
         if (trimmed === '.إيقاف المسابقة') {
             if (!isOwner) return sock.sendMessage(from, { text: '⛔ للمطور فقط.' }, { quoted: msg });
             const qs = activeQuizzes.get(from);
             if (!qs) return sock.sendMessage(from, { text: '❌ لا توجد مسابقة نشطة.' }, { quoted: msg });
             clearTimeout(qs.timer);
+            clearInterval(qs.countdownInterval);
             activeQuizzes.delete(from);
             return sock.sendMessage(from, { text: '🛑 تم إيقاف المسابقة.' }, { quoted: msg });
         }
 
-        // ─── حالة المسابقة ───
         if (trimmed === '.حالة المسابقة') {
             const qs = activeQuizzes.get(from);
             if (!qs) return sock.sendMessage(from, { text: '📭 لا توجد مسابقة نشطة.' }, { quoted: msg });
             const sorted = [...qs.scores.entries()].sort((a, b) => b[1] - a[1]);
             const mentions = sorted.map(([jid]) => jid);
-            let statusMsg = `📊 *حالة المسابقة*\n━━━━━━━━━━━━━━━━\nالسؤال: ${qs.currentIndex+1}/${qs.questions.length}\nالمشاركون: ${qs.scores.size}\n\n`;
+            let statusMsg = `📊 *حالة المسابقة*\n━━━━━━━━━━━━━━━━\nالسؤال: ${qs.currentIndex + 1}/${qs.questions.length}\nالمشاركون: ${qs.scores.size}\n`;
             if (sorted.length) {
+                const medals = ['🥇', '🥈', '🥉'];
                 statusMsg += `*الترتيب الحالي:*\n`;
-                const medals = ['🥇','🥈','🥉'];
                 sorted.forEach(([jid, pts], i) => {
-                    statusMsg += `${medals[i]||`${i+1}.`} @${jid.split('@')[0]} — *${pts} نقطة*\n`;
+                    statusMsg += `${medals[i] || `${i + 1}.`} @${jid.split('@')[0]} — *${pts} نقطة*\n`;
                 });
             }
             return sock.sendMessage(from, { text: statusMsg.trim(), mentions }, { quoted: msg });
         }
 
-        // ─── عرض الأسئلة ───
         if (trimmed === '.عرض الاسئلة') {
             if (!isOwner) return sock.sendMessage(from, { text: '⛔ للمطور فقط.' }, { quoted: msg });
             const questions = loadQuestions();
             if (!questions.length) return sock.sendMessage(from, { text: '📭 لا توجد أسئلة محفوظة.' }, { quoted: msg });
-            let preview = `📋 *الأسئلة المحفوظة (${questions.length}):*\n━━━━━━━━━━━━━━━━\n\n`;
+            let preview = `📋 *الأسئلة المحفوظة (${questions.length}):*\n━━━━━━━━━━━━━━━━\n`;
             questions.forEach((q, i) => {
-                preview += `*س${i+1}:* ${q.question}\n`;
-                q.choices.forEach((c, ci) => preview += `  ${ci===q.correctIndex?'✅':'▫️'} ${ci+1}. ${c}\n`);
-                preview += `  🎁 ${q.points} نقطة\n\n`;
+                preview += `*س${i + 1}:* ${q.question}\n`;
+                q.choices.forEach((c, ci) => preview += `${ci === q.correctIndex ? '✅' : '▫️'} ${ci + 1}. ${c}\n`);
+                if (q.explanation) preview += `📖 ${q.explanation}\n`;
+                preview += `🎁 ${q.points} نقطة\n`;
             });
             return sock.sendMessage(from, { text: preview.trim() }, { quoted: msg });
         }
 
-        // ─── مسح الأسئلة ───
         if (trimmed === '.مسح الاسئلة') {
             if (!isOwner) return sock.sendMessage(from, { text: '⛔ للمطور فقط.' }, { quoted: msg });
             saveQuestions([]);
@@ -398,4 +403,3 @@ _.مسح الاسئلة_
     onPollUpdate: () => {},
     activeQuizzes
 };
-
