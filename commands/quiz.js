@@ -128,6 +128,7 @@ function parseAndValidate(text) {
     return { questions: results, errors };
 }
 
+// ✅ التعديل هنا — العد التنازلي كل 10 ثواني
 async function startCountdown(sock, groupId, seconds) {
     const timerMsg = await sock.sendMessage(groupId, {
         text: `⏱️ *الوقت المتبقي: ${seconds} ثانية*`
@@ -135,7 +136,7 @@ async function startCountdown(sock, groupId, seconds) {
     const qs = activeQuizzes.get(groupId);
     if (!qs) return;
     qs.timerMsgKey = timerMsg.key;
-    let remaining = seconds - 1;
+    let remaining = seconds - 10;
     const interval = setInterval(async () => {
         const currentQs = activeQuizzes.get(groupId);
         if (!currentQs || currentQs.timerMsgKey?.id !== timerMsg.key.id) {
@@ -149,8 +150,8 @@ async function startCountdown(sock, groupId, seconds) {
             });
         } catch(_) {}
         if (remaining <= 0) clearInterval(interval);
-        remaining--;
-    }, 1000);
+        remaining -= 10;
+    }, 10_000);
     if (qs) qs.countdownInterval = interval;
 }
 
