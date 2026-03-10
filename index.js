@@ -77,17 +77,22 @@ async function connectAccount(accountName, authFolder, callerSock = null, caller
 
     sock.ev.on('creds.update', saveCreds);
 
-    // ✅ تحديث LID cache كلما جاءت بيانات مجموعة
     sock.ev.on('groups.update', (updates) => {
         const quizCmd = commands.get('quiz.js');
         if (!quizCmd?.updateLidCache) return;
         for (const update of updates) quizCmd.updateLidCache(update);
     });
 
+    // ✅ لوج بس لما فيه مسابقة نشطة
     sock.ev.on('messages.update', async (updates) => {
-        console.log('messages.update fired:', JSON.stringify(updates).slice(0, 200));
         const quizCmd = commands.get('quiz.js');
         if (!quizCmd?.onPollUpdate) return;
+
+        const hasActiveQuiz = quizCmd.activeQuizzes?.size > 0;
+        if (hasActiveQuiz) {
+            console.log('messages.update fired:', JSON.stringify(updates).slice(0, 200));
+        }
+
         for (const update of updates) {
             if (update.update?.pollUpdates) {
                 quizCmd.onPollUpdate(sock, update);
@@ -144,22 +149,20 @@ async function connectAccount(accountName, authFolder, callerSock = null, caller
         const isMe = msg.key.fromMe;
         const messageType = Object.keys(msg.message)[0];
 
-        // ✅ تصويتات الاستطلاع — لا فلتر زمني هنا أبداً
         messageStore.set(msg.key.id, msg.message);
         if (messageStore.size > 1000) {
             const firstKey = messageStore.keys().next().value;
             messageStore.delete(firstKey);
         }
+
         if (messageType === 'pollUpdateMessage') {
             const quizCmd = commands.get('quiz.js');
             if (quizCmd?.onPollVote) quizCmd.onPollVote(sock, msg, from);
             return;
         }
 
-        // فلتر الرسائل القديمة للرسائل العادية فقط
         if (msg.messageTimestamp && (Date.now() / 1000 - msg.messageTimestamp) > 30) return;
 
-        // ── ردود الفعل ──
         if (messageType === 'reactionMessage' && isMe) {
             const reaction = msg.message.reactionMessage;
             const targetKey = reaction.key;
@@ -190,7 +193,6 @@ async function connectAccount(accountName, authFolder, callerSock = null, caller
             return;
         }
 
-        // ── استخراج النص ──
         let text = '';
         if (messageType === 'conversation') text = msg.message.conversation;
         else if (messageType === 'extendedTextMessage') text = msg.message.extendedTextMessage.text;
@@ -198,7 +200,6 @@ async function connectAccount(accountName, authFolder, callerSock = null, caller
         else if (messageType === 'videoMessage') text = msg.message.videoMessage.caption;
         text = text?.trim() || '';
 
-        // ── رد على رسالة البوت ──
         const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
         const quotedMsg = contextInfo?.quotedMessage;
         const quotedParticipant = contextInfo?.participant;
@@ -220,7 +221,6 @@ async function connectAccount(accountName, authFolder, callerSock = null, caller
             return;
         }
 
-        // ── البحث عن الأمر ──
         let isCommand = false;
         let targetCommand = null;
         if (text) {
