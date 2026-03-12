@@ -14,6 +14,7 @@ const { isHeavyCommand, runHeavy } = require('./worker_manager')
 const activeReactions = new Set()
 const messageStore = new Map()
 
+
 async function showQR(qr, accountName, authFolder) {
     try {
         const pathQR = `./${authFolder}-qr.png`;
@@ -83,16 +84,13 @@ async function connectAccount(accountName, authFolder, callerSock = null, caller
         for (const update of updates) quizCmd.updateLidCache(update);
     });
 
-    // ✅ لوج بس لما فيه مسابقة نشطة
     sock.ev.on('messages.update', async (updates) => {
         const quizCmd = commands.get('quiz.js');
         if (!quizCmd?.onPollUpdate) return;
-
         const hasActiveQuiz = quizCmd.activeQuizzes?.size > 0;
         if (hasActiveQuiz) {
             console.log('messages.update fired:', JSON.stringify(updates).slice(0, 200));
         }
-
         for (const update of updates) {
             if (update.update?.pollUpdates) {
                 quizCmd.onPollUpdate(sock, update);
@@ -122,10 +120,22 @@ async function connectAccount(accountName, authFolder, callerSock = null, caller
 
         if (connection === 'open') {
             console.log(`✅ [${accountName}] متصل!`);
-            const GROUP_ID = ['120363360603895044@g.us', '120363424501614237@g.us'];
-            setTimeout(() => { if (fs.existsSync('./commands/islamic.js')) require('./commands/islamic.js').scheduleAzkar(sock, GROUP_ID) }, 5000);
-            setTimeout(() => { if (fs.existsSync('./commands/prayer.js')) require('./commands/prayer.js').schedulePrayer(sock) }, 7000);
-            setTimeout(() => { if (fs.existsSync('./commands/auto_broadcast.js')) require('./commands/auto_broadcast.js').scheduleAutoBroadcast(sock) }, 10000);
+            const GROUP_ID = ['120363360603895044@g.us', '120363424501614237@g.us','120363422809321259@g.us'];
+
+            // ✅ تحميل الملفات بشكل آمن مع try/catch لكل واحد
+            setTimeout(() => {
+                try {
+                    if (fs.existsSync('./commands/islamic.js'))
+                        require('./commands/islamic.js').scheduleAzkar(sock, GROUP_ID);
+                } catch(e) { console.log('⚠️ خطأ في islamic.js:', e.message); }
+            }, 5000);
+
+            setTimeout(() => {
+                try {
+                    if (fs.existsSync('./commands/prayer.js'))
+                        require('./commands/prayer.js').schedulePrayer(sock);
+                } catch(e) { console.log('⚠️ خطأ في prayer.js:', e.message); }
+            }, 7000);
         }
 
         if (connection === 'close') {
