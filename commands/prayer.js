@@ -7,7 +7,9 @@ let lastNotifiedTime = "";
 function schedulePrayer(sock) {
     // إيديهات الجروبات
     const groupIds = [
-        '120363422240545748@g.us'
+        '120363422240545748@g.us',
+        '120363422809321259@g.us',
+        '120363424501614237@g.us
     ];
 
     // إعدادات الموقع (القاهرة، مصر)
@@ -73,4 +75,3 @@ module.exports = {
     },
     schedulePrayer
 };
-
