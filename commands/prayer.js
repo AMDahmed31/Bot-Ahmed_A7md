@@ -1,50 +1,45 @@
 const { PrayerTimes, Coordinates, CalculationMethod } = require('adhan');
 const cron = require('node-cron');
 
-// متغير لمنع تكرار الإرسال في نفس الدقيقة
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 let lastNotifiedTime = "";
 
 function schedulePrayer(sock) {
-    // إيديهات الجروبات
     const groupIds = [
         '120363422240545748@g.us',
         '120363422809321259@g.us',
-        '120363424501614237@g.us
+        '120363424501614237@g.us'
     ];
 
-    // إعدادات الموقع (القاهرة، مصر)
     const coords = new Coordinates(30.0444, 31.2357);
     const params = CalculationMethod.Egyptian();
 
-    // تشغيل الكرون كل دقيقة
     cron.schedule('* * * * *', async () => {
         try {
             const date = new Date();
             const prayerTimes = new PrayerTimes(coords, date, params);
             
-            // صيغة الوقت الحالية (ساعة:دقيقة)
             const now = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-            // إذا تم الإرسال مسبقاً في هذه الدقيقة، اخرج منعاً للضغط
             if (lastNotifiedTime === now) return;
 
             const prayers = {
-                fajr: { name: 'الـفجر', time: prayerTimes.fajr.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) },
-                dhuhr: { name: 'الـظهر', time: prayerTimes.dhuhr.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) },
-                asr: { name: 'الـعصر', time: prayerTimes.asr.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) },
+                fajr:    { name: 'الـفجر',  time: prayerTimes.fajr.toLocaleTimeString('en-GB',    { hour: '2-digit', minute: '2-digit' }) },
+                dhuhr:   { name: 'الـظهر',  time: prayerTimes.dhuhr.toLocaleTimeString('en-GB',   { hour: '2-digit', minute: '2-digit' }) },
+                asr:     { name: 'الـعصر',  time: prayerTimes.asr.toLocaleTimeString('en-GB',     { hour: '2-digit', minute: '2-digit' }) },
                 maghrib: { name: 'الـمغرب', time: prayerTimes.maghrib.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) },
-                isha: { name: 'الـعشاء', time: prayerTimes.isha.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) },
+                isha:    { name: 'الـعشاء', time: prayerTimes.isha.toLocaleTimeString('en-GB',    { hour: '2-digit', minute: '2-digit' }) },
             };
 
             for (let p in prayers) {
                 if (now === prayers[p].time) {
-                    lastNotifiedTime = now; // تحديث وقت آخر إرسال فوراً
+                    lastNotifiedTime = now;
                     
                     console.log(`[PRAYER] حان موعد صلاة ${prayers[p].name}، جاري إرسال المنشن...`);
 
                     for (let id of groupIds) {
                         try {
-                            // جلب الميتاداتا (نطلبها فقط عند وقت الصلاة لتوفير الرام)
                             const metadata = await sock.groupMetadata(id);
                             const participants = metadata.participants.map(u => u.id);
 
@@ -54,6 +49,9 @@ function schedulePrayer(sock) {
                                 text: prayerMsg,
                                 mentions: participants
                             });
+
+                            // ✅ تأخير ثانيتين بين كل جروب والتاني
+                            await delay(2000);
 
                         } catch (err) {
                             console.error(`❌ فشل الإرسال للجروب ${id}:`, err.message);
@@ -70,7 +68,6 @@ function schedulePrayer(sock) {
 module.exports = {
     commands: ['تفعيل_الصلاة'],
     execute: async (sock, msg, from) => {
-        // رسالة تأكيد عند كتابة الأمر
         await sock.sendMessage(from, { text: "✅ نظام مواقيت الصلاة مفعل الآن وسيعمل في الخلفية تلقائياً." });
     },
     schedulePrayer
