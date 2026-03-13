@@ -32,8 +32,15 @@ module.exports = {
     scheduleAzkar(sock, GROUP_ID) {
         setInterval(async () => {
             const hour = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' })).getHours()
-            if (hour === 7) await sock.sendMessage(GROUP_ID, { text: "🌅 أذكار الصباح.." })
-            if (hour === 18) await sock.sendMessage(GROUP_ID, { text: "🌆 أذكار المساء.." })
+
+            for (const groupId of GROUP_ID) {
+                try {
+                    if (hour === 7)  await sock.sendMessage(groupId, { text: "🌅 أذكار الصباح.." })
+                    if (hour === 18) await sock.sendMessage(groupId, { text: "🌆 أذكار المساء.." })
+                } catch(e) {
+                    console.log(`⚠️ فشل إرسال الأذكار للجروب ${groupId}:`, e.message)
+                }
+            }
         }, 60000)
     }
 }
