@@ -6,10 +6,11 @@ const path = require('path');
 const os = require('os');
 
 module.exports = {
-    commands: ['.tiktok', '.tt', '.ttdl'],
+    commands: ['.tiktok', '.تيك توك', '.tik'],
 
     async execute(sock, msg, from, text) {
-        const url = text.replace(/^\.(tiktok|tt|ttdl)\s*/i, '').trim();
+        // ✅ يشيل الأمر سواء كان كلمة أو كلمتين
+        const url = text.replace(/^\S+(\s+\S+)?\s*/, '').trim();
 
         if (!url) {
             return await sock.sendMessage(from, {
@@ -17,22 +18,40 @@ module.exports = {
             }, { quoted: msg });
         }
 
-        await sock.sendMessage(from, { text: '⏳ جاري تحميل الفيديو...' }, { quoted: msg });
+        await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
+        await sock.sendMessage(from, {
+            text: 'ثواني بيحمل اصبر شويه من دقيقه لدقيقتين أو على حسب حجم الفيديو........'
+        }, { quoted: msg });
 
         try {
+            const videoInfo = await getTikwmInfo(url);
+
             const rawBuffer = await tryDownloadWithRetry(url);
             if (!rawBuffer) throw new Error('لم نتمكن من تحميل فيديو صالح');
 
             const finalBuffer = await reencodeVideo(rawBuffer);
 
+            const caption = videoInfo
+                ? `🎬 *${videoInfo.title || 'بدون عنوان'}*\n\n` +
+                  `👤 *القناة:* ${videoInfo.author}\n` +
+                  `❤️ *إعجابات:* ${formatNum(videoInfo.digg_count)}\n` +
+                  `💬 *تعليقات:* ${formatNum(videoInfo.comment_count)}\n` +
+                  `🔁 *مشاركات:* ${formatNum(videoInfo.share_count)}\n` +
+                  `▶️ *مشاهدات:* ${formatNum(videoInfo.play_count)}\n\n` +
+                  `✅ تم التحميل بنجاح`
+                : '🎥 تم التحميل بنجاح ✅';
+
             await sock.sendMessage(from, {
                 video: finalBuffer,
                 mimetype: 'video/mp4',
-                caption: '🎥 تم التحميل بنجاح ✅'
+                caption
             }, { quoted: msg });
+
+            await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
 
         } catch (error) {
             console.error(error);
+            await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
             await sock.sendMessage(from, {
                 text: `❌ فشل التحميل: ${error.message || 'حاول مرة أخرى'}`
             }, { quoted: msg });
@@ -40,9 +59,6 @@ module.exports = {
     }
 };
 
-// ==============================
-// محاولة التحميل من عدة APIs
-// ==============================
 async function tryDownloadWithRetry(url) {
     const apis = [
         { name: 'tikwm',    fn: () => tikwm(url)    },
@@ -79,19 +95,22 @@ async function tryDownloadWithRetry(url) {
     throw lastError || new Error('جميع المحاولات فشلت');
 }
 
-// ==============================
-// API 1: tikwm.com
-// ==============================
 async function tikwm(url) {
     const { data } = await axios.get(
         `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}&hd=1`,
-        { timeout: 15000 }
+        {
+            timeout: 15000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://www.tikwm.com/',
+                'Accept': 'application/json'
+            },
+            validateStatus: () => true
+        }
     );
-    if (!data || data.code !== 0) throw new Error('tikwm: استجابة غير صالحة');
+    if (!data || data.code !== 0) throw new Error(`tikwm: ${data?.msg || 'استجابة غير صالحة'}`);
 
     const res = data.data;
-
-    // wmplay أفضل لأنه H264 عادي - hdplay ممكن يكون BVC2
     const candidates = [res.play, res.wmplay, res.hdplay].filter(Boolean);
 
     for (const c of candidates) {
@@ -105,9 +124,6 @@ async function tikwm(url) {
     throw new Error('tikwm: جميع الروابط BVC2 أو غير صالحة');
 }
 
-// ==============================
-// API 2: snaptik.app
-// ==============================
 async function snaptik(url) {
     const headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
@@ -128,9 +144,6 @@ async function snaptik(url) {
     return match[1].replace(/&amp;/g, '&');
 }
 
-// ==============================
-// API 3: tiktokio.com
-// ==============================
 async function tiktokio(url) {
     const { data } = await axios.post(
         'https://tiktokio.com/api/v1/tk-htmx',
@@ -150,9 +163,6 @@ async function tiktokio(url) {
     return match[1].replace(/&amp;/g, '&');
 }
 
-// ==============================
-// إعادة encode بـ ffmpeg
-// ==============================
 async function reencodeVideo(inputBuffer) {
     const tmpDir = os.tmpdir();
     const inputPath  = path.join(tmpDir, `tiktok_in_${Date.now()}.mp4`);
@@ -194,11 +204,47 @@ async function reencodeVideo(inputBuffer) {
     }
 }
 
-// ==============================
-// دوال مساعدة
-// ==============================
+async function getTikwmInfo(url) {
+    try {
+        const { data } = await axios.get(
+            `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`,
+            {
+                timeout: 15000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Referer': 'https://www.tikwm.com/',
+                    'Accept': 'application/json'
+                },
+                validateStatus: () => true
+            }
+        );
 
-// فحص إذا كان الفيديو BVC2
+        if (!data || data.code !== 0) {
+            console.log('[getTikwmInfo] فشل:', data?.msg || 'استجابة غير صالحة');
+            return null;
+        }
+
+        const d = data.data;
+        return {
+            title:         d.title         || '',
+            author:        d.author?.nickname || 'غير معروف',
+            digg_count:    d.digg_count    || 0,
+            comment_count: d.comment_count || 0,
+            share_count:   d.share_count   || 0,
+            play_count:    d.play_count    || 0,
+        };
+    } catch (e) {
+        console.log('[getTikwmInfo] خطأ:', e.message);
+        return null;
+    }
+}
+
+function formatNum(n) {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'K';
+    return String(n);
+}
+
 async function checkIsBvc2(url) {
     try {
         const res = await axios.get(url, {
@@ -213,7 +259,6 @@ async function checkIsBvc2(url) {
     }
 }
 
-// فحص الـ content-type
 async function checkContentType(url) {
     try {
         const res = await axios.head(url, { timeout: 8000 });
@@ -224,7 +269,6 @@ async function checkContentType(url) {
     }
 }
 
-// تحميل الفيديو كـ Buffer
 async function downloadBuffer(url) {
     const res = await axios({
         method: 'GET',
@@ -237,9 +281,8 @@ async function downloadBuffer(url) {
     return Buffer.from(res.data);
 }
 
-// فحص توقيع MP4
 function isValidMp4(buffer) {
     if (buffer.length < 100) return false;
     const sig = buffer.slice(4, 8).toString('ascii');
     return ['ftyp', 'moov', 'mdat', 'free', 'skip'].includes(sig);
-              }
+    }
