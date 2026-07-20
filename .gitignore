@@ -1,0 +1,8 @@
+node_modules/
+.env
+*.env
+auth_main/
+auth_main-qr.png
+config.json
+database.json
+.npm/
